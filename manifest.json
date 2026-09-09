@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "bibek.menu",
+  "name": "Better Menu",
+  "version": "1.0.0",
+  "author": "Bibek Bhusal",
+  "description": "Omarchy menu with subsequence fuzzy ranking, app grid, calculator and customizable web search.",
+  "homepage": "https://github.com/BibekBhusal0/omarchy-better-menu",
+  "kinds": [
+    "menu",
+    "bar-widget"
+  ],
+  "keepLoaded": true,
+  "entryPoints": {
+    "menu": "Menu.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Better Menu",
+    "description": "Launches the menu",
+    "category": "Compositor",
+    "allowMultiple": false
+  },
+  "omarchy": {
+    "clonedFrom": "omarchy.menu"
+  }
+}
