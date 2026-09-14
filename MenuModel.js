@@ -1,24 +1,27 @@
 function stripJsonc(raw) {
   return String(raw || "")
     .replace(/^\s*\/\/[^\n]*(\n|$)/gm, "")
-    .replace(/,(\s*[}\]])/g, "$1")
+    .replace(/,(\s*[}\]])/g, "$1");
 }
 
 function normalizeAliases(value) {
-  if (Array.isArray(value)) return value.filter(function(v) { return v })
-  if (typeof value === "string" && value) return [value]
-  return []
+  if (Array.isArray(value))
+    return value.filter(function (v) {
+      return v;
+    });
+  if (typeof value === "string" && value) return [value];
+  return [];
 }
 
 function normalizeItem(id, raw) {
-  var value = raw || {}
-  var aliases = normalizeAliases(value.aliases)
-  var parent = value.parent
+  var value = raw || {};
+  var aliases = normalizeAliases(value.aliases);
+  var parent = value.parent;
   if (parent === undefined)
-    parent = id.indexOf(".") >= 0 ? id.split(".").slice(0, -1).join(".") : "root"
-  if (id === "root") parent = ""
+    parent = id.indexOf(".") >= 0 ? id.split(".").slice(0, -1).join(".") : "root";
+  if (id === "root") parent = "";
 
-  var kind = value.action ? "action" : (value.target ? "link" : "menu")
+  var kind = value.action ? "action" : value.target ? "link" : "menu";
 
   return {
     id: id,
@@ -34,64 +37,80 @@ function normalizeItem(id, raw) {
     provider: value.provider || "",
     aliases: aliases,
     when: value.when || "",
-    checked: value.checked || ""
-  }
+    checked: value.checked || "",
+  };
 }
 
 function parseMenuJsonc(raw) {
-  var stripped = stripJsonc(raw)
-  if (!stripped.trim()) return []
+  var stripped = stripJsonc(raw);
+  if (!stripped.trim()) return [];
 
-  var parsed
+  var parsed;
   try {
-    parsed = JSON.parse(stripped)
+    parsed = JSON.parse(stripped);
   } catch (e) {
-    return []
+    return [];
   }
-  if (typeof parsed !== "object" || parsed === null) return []
+  if (typeof parsed !== "object" || parsed === null) return [];
 
-  var source = (parsed.items && typeof parsed.items === "object" && !Array.isArray(parsed.items))
-    ? parsed.items
-    : parsed
-  var out = []
+  var source =
+    parsed.items && typeof parsed.items === "object" && !Array.isArray(parsed.items)
+      ? parsed.items
+      : parsed;
+  var out = [];
   for (var id in source) {
-    var entry = source[id]
-    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue
-    out.push(normalizeItem(id, entry))
+    var entry = source[id];
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+    out.push(normalizeItem(id, entry));
   }
-  return out
+  return out;
 }
 
 function mergeMenuSources(defaultItems, userItems) {
-  var nextItems = ({})
-  var nextOrder = []
-  var sources = [defaultItems || [], userItems || []]
+  var nextItems = {};
+  var nextOrder = [];
+  var sources = [defaultItems || [], userItems || []];
 
   for (var s = 0; s < sources.length; s++) {
-    var src = sources[s]
+    var src = sources[s];
     for (var i = 0; i < src.length; i++) {
-      var entry = src[i]
-      if (!entry || !entry.id) continue
-      if (!nextItems[entry.id]) nextOrder.push(entry.id)
-      var prior = nextItems[entry.id] || {}
-      var merged = {}
-      for (var k in prior) merged[k] = prior[k]
-      for (var k2 in entry) merged[k2] = entry[k2]
-      merged.id = entry.id
-      nextItems[entry.id] = merged
+      var entry = src[i];
+      if (!entry || !entry.id) continue;
+      if (!nextItems[entry.id]) nextOrder.push(entry.id);
+      var prior = nextItems[entry.id] || {};
+      var merged = {};
+      for (var k in prior) merged[k] = prior[k];
+      for (var k2 in entry) merged[k2] = entry[k2];
+      merged.id = entry.id;
+      nextItems[entry.id] = merged;
     }
   }
 
   if (!nextItems.root) {
-    nextItems.root = { id: "root", parent: "", kind: "menu", icon: "", iconFont: "", label: "Go", title: "", target: "", description: "", aliases: [], when: "", checked: "", action: "", provider: "" }
-    nextOrder.unshift("root")
+    nextItems.root = {
+      id: "root",
+      parent: "",
+      kind: "menu",
+      icon: "",
+      iconFont: "",
+      label: "Go",
+      title: "",
+      target: "",
+      description: "",
+      aliases: [],
+      when: "",
+      checked: "",
+      action: "",
+      provider: "",
+    };
+    nextOrder.unshift("root");
   }
-  for (var k3 = 0; k3 < nextOrder.length; k3++) nextItems[nextOrder[k3]].order = k3
+  for (var k3 = 0; k3 < nextOrder.length; k3++) nextItems[nextOrder[k3]].order = k3;
 
   return {
     items: nextItems,
-    itemOrder: nextOrder
-  }
+    itemOrder: nextOrder,
+  };
 }
 
 // Both merges below return fresh items/itemOrder objects for the caller to
@@ -105,31 +124,31 @@ function mergeMenuSources(defaultItems, userItems) {
 // Swaps every app row for the current set. Rows keep the order they arrive in;
 // ids already claimed (including duplicate desktop ids) are listed once.
 function mergeAppRows(items, itemOrder, appRows) {
-  var source = items || ({})
-  var order = Array.isArray(itemOrder) ? itemOrder : []
-  var rows = Array.isArray(appRows) ? appRows : []
-  var nextItems = ({})
-  var nextOrder = []
+  var source = items || {};
+  var order = Array.isArray(itemOrder) ? itemOrder : [];
+  var rows = Array.isArray(appRows) ? appRows : [];
+  var nextItems = {};
+  var nextOrder = [];
 
   for (var i = 0; i < order.length; i++) {
-    var id = order[i]
-    var existing = source[id]
+    var id = order[i];
+    var existing = source[id];
     // Orphans (an id with no item) are dropped rather than carried forward,
     // so a single lost write cannot compound into a duplicate row.
-    if (!existing || existing.kind === "app") continue
-    nextItems[id] = existing
-    nextOrder.push(id)
+    if (!existing || existing.kind === "app") continue;
+    nextItems[id] = existing;
+    nextOrder.push(id);
   }
 
   for (var j = 0; j < rows.length; j++) {
-    var row = rows[j]
-    if (!row || !row.id || nextItems[row.id]) continue
-    row.order = nextOrder.length
-    nextItems[row.id] = row
-    nextOrder.push(row.id)
+    var row = rows[j];
+    if (!row || !row.id || nextItems[row.id]) continue;
+    row.order = nextOrder.length;
+    nextItems[row.id] = row;
+    nextOrder.push(row.id);
   }
 
-  return { items: nextItems, itemOrder: nextOrder }
+  return { items: nextItems, itemOrder: nextOrder };
 }
 
 // Swaps the rows one provider contributed, leaving every other item untouched.
@@ -137,34 +156,34 @@ function mergeAppRows(items, itemOrder, appRows) {
 // again drops its previous batch — a plugin that was just enabled disappears
 // from the Enable list — without disturbing static children declared in JSONC.
 function swapProviderRows(items, itemOrder, menuId, rows) {
-  var source = items || ({})
-  var order = Array.isArray(itemOrder) ? itemOrder : []
-  var incoming = Array.isArray(rows) ? rows : []
-  var nextItems = ({})
-  var nextOrder = []
+  var source = items || {};
+  var order = Array.isArray(itemOrder) ? itemOrder : [];
+  var incoming = Array.isArray(rows) ? rows : [];
+  var nextItems = {};
+  var nextOrder = [];
 
   for (var i = 0; i < order.length; i++) {
-    var id = order[i]
-    var existing = source[id]
-    if (!existing || existing.providerMenu === menuId) continue
-    nextItems[id] = existing
-    nextOrder.push(id)
+    var id = order[i];
+    var existing = source[id];
+    if (!existing || existing.providerMenu === menuId) continue;
+    nextItems[id] = existing;
+    nextOrder.push(id);
   }
 
   for (var j = 0; j < incoming.length; j++) {
-    var row = incoming[j]
-    if (!row || !row.id || nextItems[row.id]) continue
-    row.providerMenu = menuId
-    row.order = nextOrder.length
-    nextItems[row.id] = row
-    nextOrder.push(row.id)
+    var row = incoming[j];
+    if (!row || !row.id || nextItems[row.id]) continue;
+    row.providerMenu = menuId;
+    row.order = nextOrder.length;
+    nextItems[row.id] = row;
+    nextOrder.push(row.id);
   }
 
-  return { items: nextItems, itemOrder: nextOrder }
+  return { items: nextItems, itemOrder: nextOrder };
 }
 
 function item(items, id) {
-  return items && items[id] ? items[id] : null
+  return items && items[id] ? items[id] : null;
 }
 
 // Routes may name a real id (`system`, `setup.power`) or an alias declared in
@@ -174,185 +193,211 @@ function item(items, id) {
 // (htop ships `Keywords=system;...`). Unknown strings fall through as the
 // literal input so misspellings still attempt to open that id.
 function resolveRoute(items, itemOrder, input) {
-  var raw = String(input || "").toLowerCase().replace(/_/g, "-")
-  if (!raw || raw === "go" || raw === "menu") return "root"
-  if (item(items, raw)) return raw
-  var order = Array.isArray(itemOrder) ? itemOrder : []
+  var raw = String(input || "")
+    .toLowerCase()
+    .replace(/_/g, "-");
+  if (!raw || raw === "go" || raw === "menu") return "root";
+  if (item(items, raw)) return raw;
+  var order = Array.isArray(itemOrder) ? itemOrder : [];
   for (var i = 0; i < order.length; i++) {
-    var entry = item(items, order[i])
-    if (!entry || entry.kind === "app" || !entry.aliases) continue
+    var entry = item(items, order[i]);
+    if (!entry || entry.kind === "app" || !entry.aliases) continue;
     for (var j = 0; j < entry.aliases.length; j++) {
-      var alias = String(entry.aliases[j] || "").toLowerCase().replace(/_/g, "-")
-      if (alias === raw) return entry.id
+      var alias = String(entry.aliases[j] || "")
+        .toLowerCase()
+        .replace(/_/g, "-");
+      if (alias === raw) return entry.id;
     }
   }
-  return raw
+  return raw;
 }
 
 function slugify(value) {
-  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item"
+  return (
+    String(value || "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "item"
+  );
 }
 
 function depthFor(items, id) {
-  var depth = 0
-  var current = item(items, id)
-  var guard = 0
+  var depth = 0;
+  var current = item(items, id);
+  var guard = 0;
 
   while (current && current.parent && current.parent !== "root" && guard < 32) {
-    depth += 1
-    current = item(items, current.parent)
-    guard += 1
+    depth += 1;
+    current = item(items, current.parent);
+    guard += 1;
   }
 
-  return depth
+  return depth;
 }
 
 function pathFor(items, id) {
-  var labels = []
-  var current = item(items, id)
-  var guard = 0
+  var labels = [];
+  var current = item(items, id);
+  var guard = 0;
 
   while (current && current.id !== "root" && guard < 32) {
-    labels.unshift(current.label)
-    current = item(items, current.parent)
-    guard += 1
+    labels.unshift(current.label);
+    current = item(items, current.parent);
+    guard += 1;
   }
 
-  return labels.join(" › ")
+  return labels.join(" › ");
 }
 
 function parentPathFor(items, id) {
-  var entry = item(items, id)
-  if (!entry || !entry.parent || entry.parent === "root") return ""
-  return pathFor(items, entry.parent)
+  var entry = item(items, id);
+  if (!entry || !entry.parent || entry.parent === "root") return "";
+  return pathFor(items, entry.parent);
 }
 
 function isDescendantOf(items, id, ancestorId) {
-  if (ancestorId === "root") return id !== "root"
+  if (ancestorId === "root") return id !== "root";
 
-  var current = item(items, id)
-  var guard = 0
+  var current = item(items, id);
+  var guard = 0;
   while (current && current.parent && guard < 32) {
-    if (current.parent === ancestorId) return true
-    current = item(items, current.parent)
-    guard += 1
+    if (current.parent === ancestorId) return true;
+    current = item(items, current.parent);
+    guard += 1;
   }
 
-  return false
+  return false;
 }
 
 function childCount(items, itemOrder, id) {
-  var count = 0
-  var order = Array.isArray(itemOrder) ? itemOrder : []
+  var count = 0;
+  var order = Array.isArray(itemOrder) ? itemOrder : [];
   for (var i = 0; i < order.length; i++) {
-    var entry = item(items, order[i])
-    if (entry && entry.parent === id) count += 1
+    var entry = item(items, order[i]);
+    if (entry && entry.parent === id) count += 1;
   }
-  return count
+  return count;
 }
 
 function isVisible(items, itemOrder, whenResults, entry, depth) {
-  if (!entry) return false
-  if (entry.when && whenResults && whenResults[entry.id] === false) return false
-  if (entry.kind !== "menu" && entry.kind !== "link") return true
-  if (entry.provider) return true
+  if (!entry) return false;
+  if (entry.when && whenResults && whenResults[entry.id] === false) return false;
+  if (entry.kind !== "menu" && entry.kind !== "link") return true;
+  if (entry.provider) return true;
 
-  var guard = depth || 0
-  if (guard >= 32) return false
+  var guard = depth || 0;
+  if (guard >= 32) return false;
 
-  var target = entry.kind === "link" ? entry.target : entry.id
-  var order = Array.isArray(itemOrder) ? itemOrder : []
+  var target = entry.kind === "link" ? entry.target : entry.id;
+  var order = Array.isArray(itemOrder) ? itemOrder : [];
   for (var i = 0; i < order.length; i++) {
-    var child = item(items, order[i])
-    if (child && child.parent === target && isVisible(items, itemOrder, whenResults, child, guard + 1)) return true
+    var child = item(items, order[i]);
+    if (
+      child &&
+      child.parent === target &&
+      isVisible(items, itemOrder, whenResults, child, guard + 1)
+    )
+      return true;
   }
 
-  return false
+  return false;
 }
 
 function labelFor(entry, checkedResults) {
-  if (!entry) return ""
-  if (entry.checked && checkedResults && checkedResults[entry.id]) return entry.label + " ✓"
-  return entry.label
+  if (!entry) return "";
+  if (entry.checked && checkedResults && checkedResults[entry.id]) return entry.label + " ✓";
+  return entry.label;
 }
 
 function searchableToken(value) {
-  return String(value || "").replace(/[._-]+/g, " ")
+  return String(value || "").replace(/[._-]+/g, " ");
 }
 
 function leafIdFor(id) {
-  var parts = String(id || "").split(".")
-  return parts.length > 0 ? parts[parts.length - 1] : id
+  var parts = String(id || "").split(".");
+  return parts.length > 0 ? parts[parts.length - 1] : id;
 }
 
 function nameSearchText(entry) {
-  if (!entry) return ""
-  var aliases = []
-  var values = Array.isArray(entry.aliases) ? entry.aliases : []
-  for (var i = 0; i < values.length; i++) aliases.push(searchableToken(values[i]))
-  return [entry.label, searchableToken(leafIdFor(entry.id)), aliases.join(" ")].join(" ").toLowerCase()
+  if (!entry) return "";
+  var aliases = [];
+  var values = Array.isArray(entry.aliases) ? entry.aliases : [];
+  for (var i = 0; i < values.length; i++) aliases.push(searchableToken(values[i]));
+  return [entry.label, searchableToken(leafIdFor(entry.id)), aliases.join(" ")]
+    .join(" ")
+    .toLowerCase();
 }
 
 function termInSearchWords(term, text) {
-  var words = String(text || "").toLowerCase().split(/\s+/)
+  var words = String(text || "")
+    .toLowerCase()
+    .split(/\s+/);
   for (var i = 0; i < words.length; i++) {
-    if (words[i] === term) return true
+    if (words[i] === term) return true;
   }
-  return false
+  return false;
 }
 
 function descriptionTextMatches(query, text) {
-  var terms = String(query || "").toLowerCase().trim().split(/\s+/)
+  var terms = String(query || "")
+    .toLowerCase()
+    .trim()
+    .split(/\s+/);
   for (var i = 0; i < terms.length; i++) {
-    if (terms[i] && !termInSearchWords(terms[i], text)) return false
+    if (terms[i] && !termInSearchWords(terms[i], text)) return false;
   }
-  return true
+  return true;
 }
 
 function matchesQuery(entry, query, visible) {
-  if (!entry || entry.id === "root") return false
-  if (!visible) return false
+  if (!entry || entry.id === "root") return false;
+  if (!visible) return false;
 
-  var nameText = nameSearchText(entry)
-  var descriptionText = String(entry.description || "").toLowerCase()
-  var terms = String(query || "").toLowerCase().trim().split(/\s+/)
+  var nameText = nameSearchText(entry);
+  var descriptionText = String(entry.description || "").toLowerCase();
+  var terms = String(query || "")
+    .toLowerCase()
+    .trim()
+    .split(/\s+/);
 
   for (var i = 0; i < terms.length; i++) {
-    if (!terms[i]) continue
-    if (nameText.indexOf(terms[i]) >= 0) continue
-    if (termInSearchWords(terms[i], descriptionText)) continue
-    return false
+    if (!terms[i]) continue;
+    if (nameText.indexOf(terms[i]) >= 0) continue;
+    if (termInSearchWords(terms[i], descriptionText)) continue;
+    return false;
   }
 
-  return true
+  return true;
 }
 
 function searchScore(items, entry, query) {
-  var needle = String(query || "").toLowerCase().trim()
-  var label = entry.label.toLowerCase()
-  var nameText = nameSearchText(entry)
-  var descriptionText = String(entry.description || "").toLowerCase()
-  var score = 80
+  var needle = String(query || "")
+    .toLowerCase()
+    .trim();
+  var label = entry.label.toLowerCase();
+  var nameText = nameSearchText(entry);
+  var descriptionText = String(entry.description || "").toLowerCase();
+  var score = 80;
 
-  if (label === needle) score = entry.parent === "root" ? 2 : 0
+  if (label === needle) score = entry.parent === "root" ? 2 : 0;
   // An installed app whose name contains the query as a whole word ("zen"
   // for Zen Browser) beats exact-labeled menu entries like Install > Zen.
-  else if (entry.kind === "app" && label.split(/\s+/).indexOf(needle) >= 0) score = 0
-  else if (label.indexOf(needle) === 0) score = 10
-  else if (label.indexOf(needle) >= 0) score = 30
-  else if (nameText.indexOf(needle) >= 0) score = 40
-  else if (descriptionTextMatches(needle, descriptionText)) score = 60
+  else if (entry.kind === "app" && label.split(/\s+/).indexOf(needle) >= 0) score = 0;
+  else if (label.indexOf(needle) === 0) score = 10;
+  else if (label.indexOf(needle) >= 0) score = 30;
+  else if (nameText.indexOf(needle) >= 0) score = 40;
+  else if (descriptionTextMatches(needle, descriptionText)) score = 60;
 
-  if (entry.kind === "menu" || entry.kind === "link") score -= 2
+  if (entry.kind === "menu" || entry.kind === "link") score -= 2;
   // App rows sort after all menu items, so they lose the tiebreak below to an
   // equal match. Outrank those, but stay inside the tier so better ones win.
-  if (entry.kind === "app") score -= 5
+  if (entry.kind === "app") score -= 5;
 
-  return score * 1000 + depthFor(items, entry.id) * 25 + entry.order
+  return score * 1000 + depthFor(items, entry.id) * 25 + entry.order;
 }
 
 function displayRow(items, itemOrder, checkedResults, entry, detail, score, section) {
-  var target = entry.kind === "link" ? entry.target : entry.id
+  var target = entry.kind === "link" ? entry.target : entry.id;
   return {
     itemId: entry.id,
     kind: entry.kind,
@@ -364,12 +409,13 @@ function displayRow(items, itemOrder, checkedResults, entry, detail, score, sect
     target: target,
     detail: detail || "",
     path: pathFor(items, entry.id),
-    childCount: (entry.kind === "menu" || entry.kind === "link") ? childCount(items, itemOrder, target) : 0,
+    childCount:
+      entry.kind === "menu" || entry.kind === "link" ? childCount(items, itemOrder, target) : 0,
     action: entry.action || "",
     provider: entry.provider || "",
     score: score || 0,
-    section: section || ""
-  }
+    section: section || "",
+  };
 }
 
 // Commands a `checked:` expression reads a value out of. Every sibling row
@@ -386,8 +432,8 @@ var GUARD_READERS = [
   "omarchy-default-browser",
   "omarchy-default-editor",
   "omarchy-default-terminal",
-  "omarchy-dns"
-]
+  "omarchy-dns",
+];
 
 // Package and command presence account for most of what the guards ask, and
 // asked one at a time they are almost all fork: the shipped menu spends over
@@ -408,18 +454,20 @@ var GUARD_READERS = [
 // parser follows the indented lines rather than reading the first one and
 // dropping half of what is installed.
 function guardHelpers() {
-  return 'declare -A __omarchy_pkgs=()\n'
-    + 'mapfile -t __omarchy_pkg_names < <({ pacman -Qq; LC_ALL=C pacman -Qi'
-    + " | awk '/^[A-Za-z]/ { provides = ($0 ~ /^Provides/); sub(/^[^:]*: /, \"\") }"
-    + ' provides && $0 != "None" { n = split($0, p, " ");'
-    + ' for (i = 1; i <= n; i++) { sub(/[<>=].*/, "", p[i]); print p[i] } }\'; } 2>/dev/null)\n'
-    + 'for __omarchy_pkg in "${__omarchy_pkg_names[@]}"; do __omarchy_pkgs[$__omarchy_pkg]=1; done\n'
-    + '__omarchy_pkg_has() { [[ -n ${__omarchy_pkgs[$1]-} ]] && return 0; '
-    + '[[ $1 == *[\\<\\>=]* ]] && { pacman -Q "$1" &>/dev/null; return; }; return 1; }\n'
-    + 'omarchy-pkg-present() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 1; done; return 0; }\n'
-    + 'omarchy-pkg-missing() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 0; done; return 1; }\n'
-    + 'omarchy-cmd-present() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 1; done; return 0; }\n'
-    + 'omarchy-cmd-missing() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 0; done; return 1; }\n'
+  return (
+    "declare -A __omarchy_pkgs=()\n" +
+    "mapfile -t __omarchy_pkg_names < <({ pacman -Qq; LC_ALL=C pacman -Qi" +
+    ' | awk \'/^[A-Za-z]/ { provides = ($0 ~ /^Provides/); sub(/^[^:]*: /, "") }' +
+    ' provides && $0 != "None" { n = split($0, p, " ");' +
+    ' for (i = 1; i <= n; i++) { sub(/[<>=].*/, "", p[i]); print p[i] } }\'; } 2>/dev/null)\n' +
+    'for __omarchy_pkg in "${__omarchy_pkg_names[@]}"; do __omarchy_pkgs[$__omarchy_pkg]=1; done\n' +
+    "__omarchy_pkg_has() { [[ -n ${__omarchy_pkgs[$1]-} ]] && return 0; " +
+    '[[ $1 == *[\\<\\>=]* ]] && { pacman -Q "$1" &>/dev/null; return; }; return 1; }\n' +
+    'omarchy-pkg-present() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 1; done; return 0; }\n' +
+    'omarchy-pkg-missing() { local p; for p in "$@"; do __omarchy_pkg_has "$p" || return 0; done; return 1; }\n' +
+    'omarchy-cmd-present() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 1; done; return 0; }\n' +
+    'omarchy-cmd-missing() { local c; for c in "$@"; do command -v "$c" &>/dev/null || return 0; done; return 1; }\n'
+  );
 }
 
 // Substitute the captured answer into the expression rather than shadowing
@@ -429,34 +477,45 @@ function guardHelpers() {
 // `VAR=x reader`, and every other form, and answer those wrong. Anything but
 // the plain substitution is left alone to run the real command.
 function guardPrelude(guards) {
-  var prelude = guardHelpers()
+  var prelude = guardHelpers();
 
   for (var i = 0; i < GUARD_READERS.length; i++) {
     // The guards arrive already substituted, so what marks a reader as wanted
     // is the slot standing in for it, not the call it replaced.
-    if (guards.indexOf(guardReaderSlot(i)) < 0) continue
+    if (guards.indexOf(guardReaderSlot(i)) < 0) continue;
     // `|| :` so a reader that exits nonzero cannot take the batch down with
     // it under a login shell that turned on errexit.
-    prelude += "__omarchy_read_" + i + "=$(" + GUARD_READERS[i] + " 2>/dev/null) || :\n"
+    prelude += "__omarchy_read_" + i + "=$(" + GUARD_READERS[i] + " 2>/dev/null) || :\n";
   }
 
-  return prelude
+  return prelude;
 }
 
 function guardReaderSlot(index) {
-  return "${__omarchy_read_" + index + "}"
+  return "${__omarchy_read_" + index + "}";
 }
 
 function substituteGuardReaders(expression) {
   for (var i = 0; i < GUARD_READERS.length; i++)
-    expression = expression.split("$(" + GUARD_READERS[i] + ")").join(guardReaderSlot(i))
+    expression = expression.split("$(" + GUARD_READERS[i] + ")").join(guardReaderSlot(i));
 
-  return expression
+  return expression;
 }
 
 function guardLine(id, tag, expression) {
-  return "if { " + substituteGuardReaders(expression) + "; } >/dev/null 2>&1; then echo "
-    + id + ":" + tag + ":1; else echo " + id + ":" + tag + ":0; fi\n"
+  return (
+    "if { " +
+    substituteGuardReaders(expression) +
+    "; } >/dev/null 2>&1; then echo " +
+    id +
+    ":" +
+    tag +
+    ":1; else echo " +
+    id +
+    ":" +
+    tag +
+    ":0; fi\n"
+  );
 }
 
 // One bash script for every `when:` and `checked:` in the menu, reporting
@@ -464,99 +523,134 @@ function guardLine(id, tag, expression) {
 // the last evaluation's answers, so however long this takes is how long a row
 // can contradict the state it describes.
 function guardScript(items) {
-  var guards = ""
-  var ids = Object.keys(items || {})
+  var guards = "";
+  var ids = Object.keys(items || {});
 
   for (var i = 0; i < ids.length; i++) {
-    var entry = items[ids[i]]
-    if (!entry) continue
-    if (entry.when) guards += guardLine(ids[i], "w", entry.when)
-    if (entry.checked) guards += guardLine(ids[i], "c", entry.checked)
+    var entry = items[ids[i]];
+    if (!entry) continue;
+    if (entry.when) guards += guardLine(ids[i], "w", entry.when);
+    if (entry.checked) guards += guardLine(ids[i], "c", entry.checked);
   }
 
-  return guards ? guardPrelude(guards) + guards : ""
+  return guards ? guardPrelude(guards) + guards : "";
 }
 
 function calcTokenize(expr) {
-  var tokens = []
-  var i = 0
+  var tokens = [];
+  var i = 0;
   while (i < expr.length) {
-    var ch = expr[i]
-    if (ch === " " || ch === "\t") { i++; continue }
-    if ((ch >= "0" && ch <= "9") || ch === ".") {
-      var num = ""
-      while (i < expr.length && ((expr[i] >= "0" && expr[i] <= "9") || expr[i] === ".")) num += expr[i++]
-      if (num === "." || num.split(".").length > 2) throw new Error("bad number")
-      tokens.push({ type: "num", value: parseFloat(num) })
-      continue
+    var ch = expr[i];
+    if (ch === " " || ch === "\t") {
+      i++;
+      continue;
     }
-    if ("+-*/%^()".indexOf(ch) >= 0) { tokens.push({ type: "op", value: ch }); i++; continue }
-    throw new Error("bad char")
+    if ((ch >= "0" && ch <= "9") || ch === ".") {
+      var num = "";
+      while (i < expr.length && ((expr[i] >= "0" && expr[i] <= "9") || expr[i] === "."))
+        num += expr[i++];
+      if (num === "." || num.split(".").length > 2) throw new Error("bad number");
+      tokens.push({ type: "num", value: parseFloat(num) });
+      continue;
+    }
+    if ("+-*/%^()".indexOf(ch) >= 0) {
+      tokens.push({ type: "op", value: ch });
+      i++;
+      continue;
+    }
+    throw new Error("bad char");
   }
-  return tokens
+  return tokens;
 }
 
 function calcEvaluate(query) {
-  var expr = String(query || "").trim()
-  if (!/^[0-9\s+\-*/%^().]+$/.test(expr)) return null
-  if (!/[0-9]/.test(expr) || !/[+\-*/%^]/.test(expr.replace(/^\s*-/, ""))) return null
-  var tokens
-  try { tokens = calcTokenize(expr) } catch (e) { return null }
-  var pos = 0
-  function peek() { return pos < tokens.length ? tokens[pos] : null }
-  function next() { return tokens[pos++] }
+  var expr = String(query || "").trim();
+  if (!/^[0-9\s+\-*/%^().]+$/.test(expr)) return null;
+  if (!/[0-9]/.test(expr) || !/[+\-*/%^]/.test(expr.replace(/^\s*-/, ""))) return null;
+  var tokens;
+  try {
+    tokens = calcTokenize(expr);
+  } catch (e) {
+    return null;
+  }
+  var pos = 0;
+  function peek() {
+    return pos < tokens.length ? tokens[pos] : null;
+  }
+  function next() {
+    return tokens[pos++];
+  }
   function parsePrimary() {
-    var t = next()
-    if (!t) throw new Error("end")
-    if (t.type === "num") return t.value
+    var t = next();
+    if (!t) throw new Error("end");
+    if (t.type === "num") return t.value;
     if (t.type === "op" && t.value === "(") {
-      var v = parseExpr()
-      var c = next()
-      if (!c || c.type !== "op" || c.value !== ")") throw new Error("paren")
-      return v
+      var v = parseExpr();
+      var c = next();
+      if (!c || c.type !== "op" || c.value !== ")") throw new Error("paren");
+      return v;
     }
-    throw new Error("primary")
+    throw new Error("primary");
   }
   function parseUnary() {
-    var t = peek()
-    if (t && t.type === "op" && (t.value === "-" || t.value === "+")) { next(); var v = parseUnary(); return t.value === "-" ? -v : v }
-    return parsePrimary()
+    var t = peek();
+    if (t && t.type === "op" && (t.value === "-" || t.value === "+")) {
+      next();
+      var v = parseUnary();
+      return t.value === "-" ? -v : v;
+    }
+    return parsePrimary();
   }
   function parseFactor() {
-    var base = parseUnary()
-    var t = peek()
-    if (t && t.type === "op" && t.value === "^") { next(); return Math.pow(base, parseFactor()) }
-    return base
+    var base = parseUnary();
+    var t = peek();
+    if (t && t.type === "op" && t.value === "^") {
+      next();
+      return Math.pow(base, parseFactor());
+    }
+    return base;
   }
   function parseTerm() {
-    var v = parseFactor()
+    var v = parseFactor();
     for (;;) {
-      var t = peek()
-      if (!t || t.type !== "op") break
-      if (t.value === "*") { next(); v *= parseFactor() }
-      else if (t.value === "/") { next(); v /= parseFactor() }
-      else if (t.value === "%") { next(); v %= parseFactor() }
-      else break
+      var t = peek();
+      if (!t || t.type !== "op") break;
+      if (t.value === "*") {
+        next();
+        v *= parseFactor();
+      } else if (t.value === "/") {
+        next();
+        v /= parseFactor();
+      } else if (t.value === "%") {
+        next();
+        v %= parseFactor();
+      } else break;
     }
-    return v
+    return v;
   }
   function parseExpr() {
-    var v = parseTerm()
+    var v = parseTerm();
     for (;;) {
-      var t = peek()
-      if (!t || t.type !== "op") break
-      if (t.value === "+") { next(); v += parseTerm() }
-      else if (t.value === "-") { next(); v -= parseTerm() }
-      else break
+      var t = peek();
+      if (!t || t.type !== "op") break;
+      if (t.value === "+") {
+        next();
+        v += parseTerm();
+      } else if (t.value === "-") {
+        next();
+        v -= parseTerm();
+      } else break;
     }
-    return v
+    return v;
   }
   try {
-    var result = parseExpr()
-    if (pos !== tokens.length) return null
-    if (typeof result !== "number" || !isFinite(result)) return null
-    return Math.round(result * 1e10) / 1e10
-  } catch (e) { return null }
+    var result = parseExpr();
+    if (pos !== tokens.length) return null;
+    if (typeof result !== "number" || !isFinite(result)) return null;
+    return Math.round(result * 1e10) / 1e10;
+  } catch (e) {
+    return null;
+  }
 }
 
 if (typeof module !== "undefined") {
@@ -588,6 +682,6 @@ if (typeof module !== "undefined") {
     matchesQuery: matchesQuery,
     searchScore: searchScore,
     calcEvaluate: calcEvaluate,
-    displayRow: displayRow
-  }
+    displayRow: displayRow,
+  };
 }
