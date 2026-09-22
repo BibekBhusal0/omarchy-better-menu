@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "bibek.menu",
   "name": "Better Menu",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "author": "Bibek Bhusal",
   "description": "Omarchy menu with subsequence fuzzy ranking, app grid, calculator and customizable web search.",
   "homepage": "https://github.com/BibekBhusal0/omarchy-better-menu",

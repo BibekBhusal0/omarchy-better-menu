@@ -116,7 +116,7 @@ function mergeMenuSources(defaultItems, userItems) {
 // Both merges below return fresh items/itemOrder objects for the caller to
 // assign in one go. They must never write into the maps they are handed: those
 // live in QML `var` properties, and an in-place write into such an object is
-// occasionally dropped by the engine — the key lands with an undefined value.
+// occasionally dropped by the engine, so the key lands with an undefined value.
 // A lost write used to leave an id in itemOrder with no item behind it, and
 // the next merge then kept that orphan and appended a second row for the same
 // app, so the launcher listed it twice (and again on every later rescan).
@@ -153,8 +153,8 @@ function mergeAppRows(items, itemOrder, appRows) {
 
 // Swaps the rows one provider contributed, leaving every other item untouched.
 // Rows carry the id of the submenu that produced them, so a provider that runs
-// again drops its previous batch — a plugin that was just enabled disappears
-// from the Enable list — without disturbing static children declared in JSONC.
+// again drops its previous batch: a plugin that was just enabled disappears
+// from the Enable list, without disturbing static children declared in JSONC.
 function swapProviderRows(items, itemOrder, menuId, rows) {
   var source = items || {};
   var order = Array.isArray(itemOrder) ? itemOrder : [];
