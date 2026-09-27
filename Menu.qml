@@ -43,8 +43,7 @@ Item {
   }
 
   function refresh() {
-    defaultMenuFile.reload();
-    userMenuFile.reload();
+    root.loadConfigs();
     return "ok";
   }
 
@@ -235,15 +234,6 @@ Item {
         return;
       root.loadFallbackHides(root.fallbackConfiguredHides + "\n" + fallbackHidesOutput.text);
     }
-  }
-  FileView {
-    id: searchEngineFile
-    path: Quickshell.env("HOME") + "/.config/omarchy/menu.json"
-    watchChanges: true
-    printErrors: false
-    onLoaded: root.loadEngineConfig(text())
-    onFileChanged: searchEngineFile.reload()
-    onLoadFailed: root.searchEngineRaw = ""
   }
   function loadEngineConfig(rawText) {
     var value = "";
@@ -1116,6 +1106,7 @@ Item {
     cursorActive = true;
     root.disarmPointer();
     root.evaluateGuards();
+    root.loadConfigs();
     opened = true;
     rebuildDisplay();
     refreshAppsIfLoaded();
@@ -1146,6 +1137,7 @@ Item {
     selectedIndex = 0;
     cursorActive = mode !== "input";
     root.disarmPointer();
+    root.loadConfigs();
     opened = true;
     rebuildDisplay();
     Qt.callLater(function () {
@@ -1253,36 +1245,167 @@ Item {
       root.mergeAppRows();
   }
 
-  // The JSONC sources are watched so live edits to the default file (or the
-  // user extension at ~/.config/omarchy/extensions/omarchy-menu.jsonc) take
-  // effect without restarting the shell.
-  FileView {
-    id: defaultMenuFile
-    path: root.defaultMenuPath
-    watchChanges: true
-    printErrors: false
-    onLoaded: {
-      root.defaultMenuItems = root.parseMenuJsonc(text());
-      root.rebuildItemsFromSources();
+  // The JSONC sources are re-read (bounded, no-follow) at startup, on open,
+  // and every 10s, so live edits to the default file (or the user extension
+  // at ~/.config/omarchy/extensions/omarchy-menu.jsonc) take effect without
+  // restarting the shell.
+  property int maxConfigBytes: 262144
+  property int configTimeoutMs: 5000
+  readonly property string readScriptPath: Qt.resolvedUrl("scripts/read-config").toString().replace(/^file:\/\//, "")
+  property var configQueue: []
+  property string configStage: ""
+  property string engineRaw: ""
+  property string defaultRaw: ""
+  property string userRaw: ""
+
+  function killProc(proc) {
+    try {
+      proc.signal(9);
+    } catch (e) {
     }
-    onFileChanged: reload()
+    proc.running = false;
   }
 
-  FileView {
-    id: userMenuFile
-    path: root.userMenuPath
-    watchChanges: true
-    printErrors: false
-    onLoaded: {
-      root.userMenuItems = root.parseMenuJsonc(text());
-      root.rebuildItemsFromSources();
-    }
-    onLoadFailed: {
-      root.userMenuItems = [];
-      root.rebuildItemsFromSources();
-    }
-    onFileChanged: reload()
+  function loadConfigs() {
+    if (configProc.running)
+      return;
+    root.configQueue = [
+      {
+        "kind": "engine",
+        "path": Quickshell.env("HOME") + "/.config/omarchy/menu.json"
+      },
+      {
+        "kind": "default",
+        "path": root.defaultMenuPath
+      },
+      {
+        "kind": "user",
+        "path": root.userMenuPath
+      }
+    ];
+    root.nextConfig();
   }
+
+  function nextConfig() {
+    if (root.configQueue.length === 0)
+      return;
+    var job = root.configQueue[0];
+    root.configStage = job.kind;
+    configProc.collected = "";
+    configProc.collectedBytes = 0;
+    configProc.overflowed = false;
+    configProc.timedOut = false;
+    configProc.command = [root.readScriptPath, job.path, String(root.maxConfigBytes)];
+    configWatchdog.restart();
+    configProc.running = true;
+  }
+
+  function applyConfig(kind, ok, raw) {
+    if (kind === "engine") {
+      var engineText = ok ? String(raw || "") : "";
+      if (engineText === root.engineRaw)
+        return;
+      root.engineRaw = engineText;
+      root.loadEngineConfig(root.engineRaw);
+      return;
+    }
+    if (!ok) {
+      if (kind === "user" && root.userRaw !== "") {
+        root.userRaw = "";
+        root.userMenuItems = [];
+        root.rebuildItemsFromSources();
+      }
+      return;
+    }
+    var next = String(raw || "");
+    if (kind === "default") {
+      if (next === root.defaultRaw)
+        return;
+      root.defaultRaw = next;
+      root.defaultMenuItems = root.parseMenuJsonc(next);
+    } else {
+      if (next === root.userRaw)
+        return;
+      root.userRaw = next;
+      root.userMenuItems = root.parseMenuJsonc(next);
+    }
+    root.rebuildItemsFromSources();
+  }
+
+  Timer {
+    id: configWatchdog
+    interval: root.configTimeoutMs
+    repeat: false
+    onTriggered: {
+      if (configProc.running) {
+        configProc.timedOut = true;
+        configProc.collected = "";
+        configProc.collectedBytes = 0;
+        root.killProc(configProc);
+      }
+    }
+  }
+
+  Timer {
+    id: configPoll
+    interval: 10000
+    repeat: true
+    running: true
+    onTriggered: root.loadConfigs()
+  }
+
+  Process {
+    id: configProc
+    property string collected: ""
+    property int collectedBytes: 0
+    property bool overflowed: false
+    property bool timedOut: false
+    stdout: SplitParser {
+      onRead: function (data) {
+        if (configProc.overflowed || configProc.timedOut)
+          return;
+        var chunk = String(data + "\n");
+        if (configProc.collectedBytes + chunk.length > root.maxConfigBytes) {
+          configProc.overflowed = true;
+          configProc.collected = "";
+          configProc.collectedBytes = 0;
+          root.killProc(configProc);
+          return;
+        }
+        configProc.collected += chunk;
+        configProc.collectedBytes += chunk.length;
+      }
+    }
+    stderr: SplitParser {
+      onRead: function (data) {
+        if (configProc.overflowed || configProc.timedOut)
+          return;
+        configProc.collectedBytes += String(data + "\n").length;
+        if (configProc.collectedBytes > root.maxConfigBytes) {
+          configProc.overflowed = true;
+          configProc.collected = "";
+          configProc.collectedBytes = 0;
+          root.killProc(configProc);
+        }
+      }
+    }
+    onExited: function (exitCode) {
+      configWatchdog.stop();
+      var ok = !configProc.overflowed && !configProc.timedOut && exitCode === 0;
+      var output = String(configProc.collected);
+      configProc.collected = "";
+      configProc.collectedBytes = 0;
+      configProc.overflowed = false;
+      configProc.timedOut = false;
+      var stage = root.configStage;
+      if (root.configQueue.length > 0)
+        root.configQueue.shift();
+      root.applyConfig(stage, ok, output);
+      root.nextConfig();
+    }
+  }
+
+  Component.onCompleted: root.loadConfigs()
 
   // ---------------------------------------------------------------- guards
   // `when:` (visibility) and `checked:` (✓ marker) are bash expressions the
