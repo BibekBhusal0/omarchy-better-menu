@@ -292,6 +292,24 @@ Item {
   property int visibleRowsHeight: root.dmenuActive ? dmenuRowListHeight(layoutSerial, displayModel.count, filterText) : (root.isAppsGrid ? root.gridRowsHeight() : rowListHeight(layoutSerial, displayModel.count, filterText, searchDivider))
   property int cardHeight: root.dmenuActive ? Math.min(contentMargin * 2 + headerHeight + (mode === "input" ? 0 : contentSpacing + visibleRowsHeight), panel.height - Style.gapsOut * 2) : Math.min(contentMargin * 2 + headerHeight + contentSpacing + visibleRowsHeight, panel.height - Style.gapsOut * 2)
 
+  readonly property string writeScriptPath: Qt.resolvedUrl("scripts/write-result").toString().replace(/^file:\/\//, "")
+  property string pendingSelection: ""
+  property bool pendingHasSelection: false
+
+  function safeSelectionText(s) {
+    var text = String(s);
+    try {
+      unescape(encodeURIComponent(text));
+      return text;
+    } catch (e) {
+      return text.replace(/[\uD800-\uDFFF]/g, "\uFFFD");
+    }
+  }
+
+  function utf8Length(s) {
+    return unescape(encodeURIComponent(s)).length;
+  }
+
   function finishRequest(selection) {
     if (!root.requestActive || !root.doneFile) {
       root.opened = false;
@@ -302,10 +320,17 @@ Item {
     root.requestActive = false;
     root.selectionFile = "";
     root.doneFile = "";
+    if (resultProc.running)
+      root.killProc(resultProc);
     if (selection === null || selection === undefined) {
-      resultProc.command = ["bash", "-c", ": > " + Util.shellQuote(activeDoneFile)];
+      root.pendingHasSelection = false;
+      root.pendingSelection = "";
+      resultProc.command = [root.writeScriptPath, activeDoneFile];
     } else {
-      resultProc.command = ["bash", "-c", "printf '%s\\n' " + Util.shellQuote(selection) + " > " + Util.shellQuote(activeSelectionFile) + "; : > " + Util.shellQuote(activeDoneFile)];
+      var text = root.safeSelectionText(selection);
+      root.pendingHasSelection = true;
+      root.pendingSelection = text;
+      resultProc.command = [root.writeScriptPath, activeDoneFile, activeSelectionFile, String(root.utf8Length(text))];
     }
     resultProc.running = true;
   }
@@ -1211,6 +1236,13 @@ Item {
 
   Process {
     id: resultProc
+    stdinEnabled: true
+    onStarted: {
+      if (root.pendingHasSelection)
+        resultProc.write(root.pendingSelection);
+      root.pendingHasSelection = false;
+      root.pendingSelection = "";
+    }
     onExited: {
       if (root.applySerial === root.requestSerial)
         root.opened = false;
@@ -1269,20 +1301,16 @@ Item {
   function loadConfigs() {
     if (configProc.running)
       return;
-    root.configQueue = [
-      {
+    root.configQueue = [{
         "kind": "engine",
         "path": Quickshell.env("HOME") + "/.config/omarchy/menu.json"
-      },
-      {
+      }, {
         "kind": "default",
         "path": root.defaultMenuPath
-      },
-      {
+      }, {
         "kind": "user",
         "path": root.userMenuPath
-      }
-    ];
+      }];
     root.nextConfig();
   }
 

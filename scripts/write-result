@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# Complete a dmenu request without exposing the selection on the command line.
+# Usage: write-result <done-file> [selection-file <byte-count>]
+# Selection bytes arrive on stdin; argv carries only paths and the count.
+set -euo pipefail
+
+done_file="${1:?done file required}"
+sel_file="${2:-}"
+count="${3:-0}"
+
+[[ "$done_file" == /* ]] || exit 1
+[[ -z "$sel_file" || "$sel_file" == /* ]] || exit 1
+[[ "$count" =~ ^[0-9]+$ ]] || exit 1
+(( count <= 1048576 )) || exit 1
+
+tmp=""
+cleanup() {
+  if [[ -n "${tmp:-}" ]]; then
+    /usr/bin/rm -f -- "$tmp"
+  fi
+}
+trap cleanup EXIT
+
+checked_dir() {
+  local dir="${1%/*}"
+  [[ "$dir" == /* ]] || exit 1
+  [[ -d "$dir" ]] || exit 1
+  [[ ! -L "$dir" ]] || exit 1
+  printf '%s' "$dir"
+}
+
+verify_dest() {
+  [[ ! -L "$1" ]] || exit 1
+  if [[ -e "$1" ]]; then
+    [[ -f "$1" ]] || exit 1
+  fi
+}
+
+place() {
+  /usr/bin/mv -f -- "$tmp" "$1" || exit 1
+  tmp=""
+}
+
+if [[ -n "$sel_file" ]]; then
+  dir="$(checked_dir "$sel_file")"
+  verify_dest "$sel_file"
+  tmp="$(/usr/bin/mktemp -- "$dir/.menu-result.XXXXXX")" || exit 1
+  { /usr/bin/head -c "$count"; printf '\n'; } >"$tmp" || exit 1
+  place "$sel_file"
+fi
+
+dir="$(checked_dir "$done_file")"
+verify_dest "$done_file"
+tmp="$(/usr/bin/mktemp -- "$dir/.menu-done.XXXXXX")" || exit 1
+: >"$tmp" || exit 1
+place "$done_file"
